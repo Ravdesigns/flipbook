@@ -53,5 +53,5 @@ Long side of each page is capped at 1700px on export to keep files sane.
 ## Notes
 
 - Everything runs in the browser. Files never leave the machine.
-- A4 portrait is the happy path; other sizes work but the book frame assumes the A4 ratio (1 : 1.414).
+- The book takes its shape from the first page, so a deck of 16:9 slides becomes a 16:9 book and an A4 PDF becomes an A4 book. Pages that don't match that shape are centred on white (letterboxed), never stretched.
 - Built with the Zop.Dev system: cream paper, ink, a single orange mark; Space Grotesk / Inter / JetBrains Mono in the maker, a serif title in the exported viewer (system fonts so it stays offline).

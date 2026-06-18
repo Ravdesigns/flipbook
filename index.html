@@ -326,12 +326,14 @@ const RASTER_SCALE = 1.6;          // pdf raster scale
 const MAX_SIDE = 1700;             // cap longest image side on encode
 
 const state = {
-  pages: [],        // { id, master(dataURL), w, h }
+  pages: [],        // { id, master(dataURL), w, h, norm(dataURL normalised to book ratio) }
   title: "Untitled book",
   layout: "book",   // book | single
   cover: true,
   sound: true,
   quality: 0.82,
+  ratio: A4,        // book page ratio (h/w) — taken from the first page
+  ratioLocked: false,
 };
 
 let pageFlip = null;
@@ -404,6 +406,7 @@ async function handleFiles(fileList){
       else added+=await ingestImage(f);
     }catch(err){ console.error(err); toast("Couldn't read <b>"+escapeHtml(f.name)+"</b>"); }
   }
+  if(added){ ovProgress("fitting pages"); await prepareBook(); }
   hideOverlay();
   if(added){ enterEditor(); rebuildBook(); refreshThumbs(); scheduleEstimate(); }
 }
@@ -432,7 +435,39 @@ function ingestImage(file){
   });
 }
 
-function addPage(master,w,h){ state.pages.push({id:++uid, master, w, h}); }
+function addPage(master,w,h){ state.pages.push({id:++uid, master, w, h, norm:null, normR:0}); }
+
+// The book uses one page shape for every leaf, so off-ratio pages would otherwise be
+// stretched. Take the shape from the first page, then letterbox each page onto that
+// shape (centred on white) so nothing is ever distorted.
+function clampRatio(r){ return Math.max(0.45, Math.min(2.4, r||A4)); }
+function normalizeToRatio(src, ratio){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      const iw=img.naturalWidth||1, ih=img.naturalHeight||1, T=1500;
+      let W,H; if(ratio>=1){ H=T; W=Math.round(T/ratio); } else { W=T; H=Math.round(T*ratio); }
+      const same=Math.abs((ih/iw)-ratio) < 0.01;            // first page / matching aspect → fills exactly
+      const c=document.createElement("canvas"); c.width=W; c.height=H;
+      const x=c.getContext("2d"); x.fillStyle="#fff"; x.fillRect(0,0,W,H);
+      const s=same?Math.max(W/iw,H/ih):Math.min(W/iw,H/ih); // cover for exact match, contain otherwise
+      const dw=iw*s, dh=ih*s;
+      x.drawImage(img,(W-dw)/2,(H-dh)/2,dw,dh);
+      res(c.toDataURL("image/jpeg",0.95));
+    };
+    img.onerror=()=>res(src);
+    img.src=src;
+  });
+}
+async function prepareBook(){
+  if(!state.pages.length) return;
+  if(!state.ratioLocked){ const p0=state.pages[0]; state.ratio=clampRatio((p0.h||1)/(p0.w||1)); state.ratioLocked=true; }
+  for(const p of state.pages){
+    if(Math.abs((p.h||1)/(p.w||1) - state.ratio) < 0.012){ p.norm=null; p.normR=state.ratio; continue; } // already the book shape → keep crisp original
+    if(p.norm && p.normR===state.ratio) continue;
+    p.norm=await normalizeToRatio(p.master, state.ratio); p.normR=state.ratio;
+  }
+}
 
 /* ------------------------------------------------------------------ demo */
 function loadDemo(){
@@ -448,8 +483,10 @@ function loadDemo(){
       {end:true, t:"the\nend", s:"flip back any time"},
     ];
     specs.forEach((sp,i)=>addPage(drawDemoPage(W,H,sp,i+1,specs.length),W,H));
-    hideOverlay(); enterEditor(); rebuildBook(); refreshThumbs(); scheduleEstimate();
-    toast("Demo loaded — drag a corner to turn");
+    prepareBook().then(()=>{
+      hideOverlay(); enterEditor(); rebuildBook(); refreshThumbs(); scheduleEstimate();
+      toast("Demo loaded — drag a corner to turn");
+    });
   },120);
 }
 function drawDemoPage(W,H,sp,n,total){
@@ -479,31 +516,37 @@ function drawDemoPage(W,H,sp,n,total){
 function enterEditor(){ if(el.body.classList.contains("loaded")) return; el.body.classList.add("loaded"); }
 function resetAll(){
   state.pages=[]; encCache.clear(); state.title="Untitled book"; el.titleIn.value=state.title;
+  state.ratio=A4; state.ratioLocked=false;
   if(pageFlip){ try{pageFlip.destroy();}catch(e){} pageFlip=null; }
   el.book.innerHTML=""; el.body.classList.remove("loaded");
 }
 
 /* ------------------------------------------------------------------ book render */
-function bookImages(){ return state.pages.map(p=>p.master); }
+function bookImages(){ return state.pages.map(p=>p.norm||p.master); }
 
 function rebuildBook(){
   if(!state.pages.length){ return; }
   if(pageFlip){ try{pageFlip.destroy();}catch(e){} pageFlip=null; }
   // StPageFlip.destroy() detaches its container, so give every rebuild a fresh #book node
   el.bookWrap.innerHTML=""; el.book=document.createElement("div"); el.book.id="book"; el.bookWrap.appendChild(el.book);
-  const single = state.layout==="single";
+  const single = singleMode();
   el.bookWrap.classList.remove("tweens","at-cover","at-back");   // start untweened so the cover is centred instantly
   el.bookWrap.classList.toggle("single", single);
   fitBook();
 
-  const baseW = 440, baseH = Math.round(baseW*A4);
+  const R = state.ratio||A4;
+  // StPageFlip goes portrait (single page) when blockWidth < 2*minWidth. In single mode set
+  // minWidth just under the container width to force portrait without inflating the canvas.
+  const cw = parseFloat(el.bookWrap.style.width) || el.bookWrap.clientWidth || 400;
+  const minW = singleMode() ? Math.max(80, Math.round(cw)-4) : 180;
+  const baseW = 440, baseH = Math.round(baseW*R);
   pageFlip = new St.PageFlip(el.book, {
     width: baseW, height: baseH,
     size: "stretch",
-    minWidth: 180, maxWidth: 1000,
-    minHeight: Math.round(180*A4), maxHeight: Math.round(1000*A4),
+    minWidth: minW, maxWidth: 1000,
+    minHeight: Math.round(180*R), maxHeight: Math.round(1000*R),
     drawShadow: true, maxShadowOpacity: 0.5, flippingTime: 820,
-    usePortrait: true, showCover: state.cover, autoSize: true,
+    usePortrait: true, showCover: coverOn(), autoSize: true,
     mobileScrollSupport: false, swipeDistance: 28, showPageCorners: true,
     startZIndex: 5,
   });
@@ -532,8 +575,8 @@ function fitBook(){
   const availH = el.stage.clientHeight - 84;
   const availW = el.stage.clientWidth - 56;
   if(availH<=0||availW<=0) return;
-  const across = (state.layout!=="single" && window.innerWidth>820) ? 2 : 1;
-  let w = Math.min((availH/A4)*across, availW);
+  const across = (!singleMode() && window.innerWidth>820) ? 2 : 1;
+  let w = Math.min((availH/(state.ratio||A4))*across, availW);
   el.bookWrap.style.width = Math.max(180, Math.round(w)) + "px";
 }
 let _refitting=false;
@@ -541,17 +584,24 @@ function refit(){
   if(!pageFlip) return;
   fitBook();
   _refitting=true; window.dispatchEvent(new Event("resize")); _refitting=false; // let StPageFlip re-stretch to the new width
+  // StPageFlip resizes the canvas but doesn't repaint when idle — force it, or a resize leaves a stale/stretched bitmap
+  const r=pageFlip.getRender&&pageFlip.getRender();
+  if(r&&r.drawFrame){ try{r.drawFrame();}catch(e){} setTimeout(()=>{ try{r.drawFrame();}catch(e){} },70); }
 }
 let _fitTimer=null;
 window.addEventListener("resize", ()=>{ if(_refitting||!pageFlip) return; clearTimeout(_fitTimer); _fitTimer=setTimeout(refit,140); });
 // ResizeObserver fits the book the moment the stage has real dimensions (covers first paint + panel reflow)
 if(window.ResizeObserver){ new ResizeObserver(()=>{ if(_refitting||!pageFlip) return; clearTimeout(_fitTimer); _fitTimer=setTimeout(refit,120); }).observe(el.stage); }
 
+// A lone page can't be a book cover; only treat the first page as a cover with 2+ pages.
+function coverOn(){ return state.cover && state.pages.length>1; }
+// One page is shown alone (centred), never as half of a spread.
+function singleMode(){ return state.layout==="single" || state.pages.length<2; }
 // Centre the cover / back cover so the closed book shows ONLY that page (no blank facing leaf).
 function updateCoverState(idx){
   const total=state.pages.length, single=state.layout==="single";
-  el.bookWrap.classList.toggle("at-cover", !single && state.cover && idx===0);
-  el.bookWrap.classList.toggle("at-back",  !single && state.cover && total>1 && idx>=total-1);
+  el.bookWrap.classList.toggle("at-cover", !single && coverOn() && idx===0);
+  el.bookWrap.classList.toggle("at-back",  !single && coverOn() && total>1 && idx>=total-1);
 }
 
 function updateCounter(idx){
@@ -578,7 +628,7 @@ function refreshThumbs(){
   state.pages.forEach((p,i)=>{
     const t=document.createElement("div"); t.className="thumb"; t.draggable=true; t.dataset.i=i;
     const isCover = state.cover && i===0;
-    t.innerHTML = '<img src="'+p.master+'" alt="">' +
+    t.innerHTML = '<img src="'+(p.norm||p.master)+'" alt="">' +
       (isCover?'<div class="cov"><span>COVER</span></div>':'') +
       '<span class="num">'+(i+1)+'</span>' +
       '<button class="rm" title="Remove">×</button>';
@@ -630,8 +680,8 @@ function encodePage(p,q){
       const cx=c.getContext("2d"); cx.fillStyle="#fff"; cx.fillRect(0,0,w,h); cx.drawImage(img,0,0,w,h);
       const out=c.toDataURL("image/jpeg",q); encCache.set(key,out); res(out);
     };
-    img.onerror=()=>res(p.master);
-    img.src=p.master;
+    img.onerror=()=>res(p.norm||p.master);
+    img.src=p.norm||p.master;
   });
 }
 async function encodeAll(q){ const out=[]; for(const p of state.pages) out.push(await encodePage(p,q)); return out; }
@@ -665,10 +715,9 @@ async function doExport(){
 }
 
 function buildExportHtml(pages){
-  const cfg={ cover:state.cover, single:state.layout==="single", sound:state.sound, ratio:A4 };
+  const cfg={ cover:coverOn(), single:singleMode(), sound:state.sound, ratio:state.ratio||A4 };
   const pagesJson=JSON.stringify(pages);
   const cfgJson=JSON.stringify(cfg);
-  const titleJson=JSON.stringify(state.title);
   const titleHtml=escapeHtml(state.title);
   const yr=new Date().getFullYear();
   return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8"/>\n'+
@@ -685,13 +734,13 @@ function buildExportHtml(pages){
 '<button id="vp-full" class="vp-icon" aria-label="Fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4m11-5v4a1 1 0 0 1-1 1h-4"/></svg></button></nav>\n'+
 '<a class="vp-credit" href="https://zop.dev" target="_blank" rel="noopener">made with flipbook</a>\n'+
 '<script>'+PAGEFLIP_SRC+'<\/script>\n'+
-'<script>(\n'+viewerMain.toString()+'\n)('+pagesJson+','+cfgJson+','+titleJson+');<\/script>\n'+
+'<script>(\n'+viewerMain.toString()+'\n)('+pagesJson+','+cfgJson+');<\/script>\n'+   // title is NOT passed into JS (avoids inline close-tag breakout); it is HTML-escaped above
 '</body>\n</html>';
 }
 
 /* ============================================================ EXPORT VIEWER
    Runs only inside the exported file. Self-contained, no inline close tags.   */
-function viewerMain(PAGES, CFG, TITLE){
+function viewerMain(PAGES, CFG){
   var book=document.getElementById("vp-book");
   var wrap=document.getElementById("vp-bookwrap");
   var counter=document.getElementById("vp-counter");
@@ -703,9 +752,11 @@ function viewerMain(PAGES, CFG, TITLE){
   var RATIO=CFG.ratio||1.4142, single=!!CFG.single, stage=document.querySelector(".vp-stage");
   var baseW=440, baseH=Math.round(baseW*RATIO);
   fitBook();
+  var cw=parseFloat(wrap.style.width)||wrap.clientWidth||400;
+  var minW=single?Math.max(80,Math.round(cw)-4):180;   // force single-page (portrait) without inflating the canvas
   var pf=new St.PageFlip(book,{
     width:baseW, height:baseH, size:"stretch",
-    minWidth:180, maxWidth:1000, minHeight:Math.round(180*RATIO), maxHeight:Math.round(1000*RATIO),
+    minWidth:minW, maxWidth:1000, minHeight:Math.round(180*RATIO), maxHeight:Math.round(1000*RATIO),
     drawShadow:true, maxShadowOpacity:0.5, flippingTime:820,
     usePortrait:true, showCover:!!CFG.cover, autoSize:true,
     mobileScrollSupport:false, swipeDistance:28, showPageCorners:true, startZIndex:5
@@ -721,7 +772,7 @@ function viewerMain(PAGES, CFG, TITLE){
   [60,200,500,1000,1800].forEach(function(ms){ setTimeout(redraw,ms); });
   // fit book to stage height, then let StPageFlip re-stretch
   function fitBook(){ if(!stage) return; var aH=stage.clientHeight-84, aW=stage.clientWidth-40; if(aH<=0||aW<=0) return; var across=(!single && window.innerWidth>700)?2:1; var w=Math.min((aH/RATIO)*across,aW); wrap.style.width=Math.max(180,Math.round(w))+"px"; }
-  var _ref=false; function refit(){ fitBook(); _ref=true; window.dispatchEvent(new Event("resize")); _ref=false; }
+  var _ref=false; function refit(){ fitBook(); _ref=true; window.dispatchEvent(new Event("resize")); _ref=false; redraw(); setTimeout(redraw,70); }
   var _ft=null; window.addEventListener("resize", function(){ if(_ref) return; clearTimeout(_ft); _ft=setTimeout(refit,140); });
   if(window.ResizeObserver && stage){ new ResizeObserver(function(){ if(_ref) return; clearTimeout(_ft); _ft=setTimeout(refit,120); }).observe(stage); }
   pf.on("flip", function(e){ setCounter(e.data); coverState(e.data); });
