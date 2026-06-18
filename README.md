@@ -52,7 +52,7 @@ mute toggle. The chosen background travels with it.
 | Setting   | What it does |
 |-----------|--------------|
 | Layout    | **Book** (two-page spread on desktop, single page on mobile) or **Single** (one page, always) |
-| Background| Desk + page colour: **Paper** (cream), **Light** (white), or **Slate** (dark — best for dark pages, so letterboxing blends instead of showing white bands) |
+| Background| Desk + page colour: **Greige** (warm grey-beige), **Light** (white), or **Slate** (dark — best for dark pages, so letterboxing blends instead of showing white bands) |
 | Cover     | Treat the first page as a standalone cover |
 | Page sound| Toggle the synthesized paper rustle on flip |
 | Quality   | JPEG quality of the baked pages — trades sharpness against file size (live estimate next to *Download*) |
@@ -63,4 +63,4 @@ Long side of each page is capped at 1700px on export to keep files sane.
 
 - Everything runs in the browser. Files never leave the machine.
 - The book takes its shape from the first page, so a deck of 16:9 slides becomes a 16:9 book and an A4 PDF becomes an A4 book. Pages that don't match that shape are centred on white (letterboxed), never stretched.
-- Built with the Zop.Dev system: cream paper, ink, a single orange mark; Space Grotesk / Inter / JetBrains Mono in the maker, a serif title in the exported viewer (system fonts so it stays offline).
+- Design system "Oxblood Editorial": warm greige paper, warm near-black ink, one oxblood accent. Fraunces (high-contrast serif) + Inter Tight + Spline Sans Mono in the maker; the exported viewer uses an offline system-serif stack (Didot / Hoefler → Georgia) so the shared file stays self-contained.
