@@ -142,8 +142,16 @@
   .nav button:hover{background:rgba(22,19,16,.06); color:var(--ink)}
   .nav button:disabled{opacity:.28; cursor:default}
   .nav button svg{width:17px;height:17px}
+  .nav-sep{width:1px; height:20px; background:var(--line); margin:0 3px}
   .counter{font-family:var(--mono); font-size:11px; letter-spacing:.1em; color:var(--ink-soft); padding:0 12px; min-width:62px; text-align:center}
   .counter b{color:var(--ink); font-weight:500}
+  #fs .ic-compress{display:none}
+  body.present #fs .ic-expand{display:none}
+  body.present #fs .ic-compress{display:block}
+  /* full-screen present mode — just the book, no editor chrome */
+  body.present .topbar,
+  body.present .rail{display:none}
+  body.present .editor{background:var(--paper)}
   .hint{position:absolute; top:18px; left:50%; transform:translateX(-50%); z-index:20;
     font-family:var(--mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint);
     display:flex; gap:14px; opacity:0; animation:fadein .6s .4s var(--e-out) forwards}
@@ -273,6 +281,11 @@
         <button id="prev" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
         <span class="counter" id="counter"><b>1</b> / 1</span>
         <button id="next" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
+        <span class="nav-sep"></span>
+        <button id="fs" aria-label="Full screen" title="Full screen">
+          <svg class="ic-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4m11-5v4a1 1 0 0 1-1 1h-4"/></svg>
+          <svg class="ic-compress" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v3a2 2 0 0 1-2 2H4m16 0h-3a2 2 0 0 1-2-2V4M4 15h3a2 2 0 0 1 2 2v3m6 0v-3a2 2 0 0 1 2-2h3"/></svg>
+        </button>
       </div>
     </div>
 
@@ -614,6 +627,22 @@ function updateCounter(idx){
 /* nav */
 el.prev.addEventListener("click", ()=>pageFlip&&pageFlip.flipPrev());
 el.next.addEventListener("click", ()=>pageFlip&&pageFlip.flipNext());
+
+// full-screen "present" mode — maximise the book, hide editor chrome
+function togglePresent(){
+  const goingIn = !el.body.classList.contains("present");
+  el.body.classList.toggle("present", goingIn);
+  try{
+    if(goingIn){ document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); }
+    else if(document.fullscreenElement){ document.exitFullscreen(); }
+  }catch(e){}
+  setTimeout(()=>{ if(pageFlip) refit(); }, 90);
+}
+$("#fs").addEventListener("click", togglePresent);
+document.addEventListener("fullscreenchange", ()=>{
+  // Esc / browser-exit leaves fullscreen → drop present mode too
+  if(!document.fullscreenElement && el.body.classList.contains("present")){ el.body.classList.remove("present"); setTimeout(()=>{ if(pageFlip) refit(); }, 90); }
+});
 window.addEventListener("keydown", e=>{
   if(!el.body.classList.contains("loaded")||!pageFlip) return;
   if(e.key==="ArrowLeft") pageFlip.flipPrev();
