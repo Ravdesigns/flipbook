@@ -109,7 +109,7 @@
 
   /* stage */
   .stage{
-    flex:1; position:relative; min-height:0; display:grid; place-items:center; padding:34px 24px;
+    flex:1; position:relative; min-height:0; display:grid; place-items:center; padding:42px 24px 96px;
     background:radial-gradient(125% 100% at 50% 6%, var(--desk-1), var(--desk-2) 98%);
   }
   .book-wrap{position:relative; width:min(1060px,94%); height:100%; display:flex; align-items:center; justify-content:center}
@@ -572,7 +572,7 @@ function keepBookPainted(pf, urls){
 // which otherwise lets a wide/short stage push the book over the bottom panel).
 function fitBook(){
   if(!el.stage) return;
-  const availH = el.stage.clientHeight - 84;
+  const availH = el.stage.clientHeight - 138;   // top breathing (hint) + bottom reserve for the floating nav
   const availW = el.stage.clientWidth - 56;
   if(availH<=0||availW<=0) return;
   const across = (!singleMode() && window.innerWidth>820) ? 2 : 1;
@@ -771,7 +771,7 @@ function viewerMain(PAGES, CFG){
   PAGES.forEach(function(u){ var im=new Image(); im.onload=redraw; im.onerror=redraw; im.src=u; });
   [60,200,500,1000,1800].forEach(function(ms){ setTimeout(redraw,ms); });
   // fit book to stage height, then let StPageFlip re-stretch
-  function fitBook(){ if(!stage) return; var aH=stage.clientHeight-84, aW=stage.clientWidth-40; if(aH<=0||aW<=0) return; var across=(!single && window.innerWidth>700)?2:1; var w=Math.min((aH/RATIO)*across,aW); wrap.style.width=Math.max(180,Math.round(w))+"px"; }
+  function fitBook(){ if(!stage) return; var aH=stage.clientHeight-128, aW=stage.clientWidth-40; if(aH<=0||aW<=0) return; var across=(!single && window.innerWidth>700)?2:1; var w=Math.min((aH/RATIO)*across,aW); wrap.style.width=Math.max(180,Math.round(w))+"px"; }
   var _ref=false; function refit(){ fitBook(); _ref=true; window.dispatchEvent(new Event("resize")); _ref=false; redraw(); setTimeout(redraw,70); }
   var _ft=null; window.addEventListener("resize", function(){ if(_ref) return; clearTimeout(_ft); _ft=setTimeout(refit,140); });
   if(window.ResizeObserver && stage){ new ResizeObserver(function(){ if(_ref) return; clearTimeout(_ft); _ft=setTimeout(refit,120); }).observe(stage); }
@@ -819,7 +819,7 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(125% 10
 .vp-top{flex:0 0 auto;text-align:center;padding:26px 20px 6px}
 .vp-title{font-family:var(--serif);font-size:clamp(1.15rem,2.4vw,1.6rem);font-weight:500;letter-spacing:.01em;color:var(--ink)}
 .vp-meta{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);margin-top:6px}
-.vp-stage{flex:1;position:relative;min-height:0;display:grid;place-items:center;padding:14px 18px 90px}
+.vp-stage{flex:1;position:relative;min-height:0;display:grid;place-items:center;padding:18px 18px 104px}
 .vp-bookwrap{position:relative;width:min(1060px,94vw);height:100%;display:flex;align-items:center;justify-content:center}
 .vp-bookwrap.single{width:min(470px,90vw)}
 #vp-book{position:relative;z-index:2;width:100%;touch-action:pan-y}
