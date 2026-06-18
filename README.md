@@ -27,6 +27,14 @@ not a bare `file://` open. So serve the folder:
 Then: drop a PDF or PNG/JPG pages → reorder/trim in the strip → tweak settings →
 **Download**. Or hit *Try a demo book* to see it with no upload.
 
+## Three ways to share
+
+- **Download** → a self-contained `.html` (the main artifact, see below).
+- **Video** → records the flip-through as an `.mp4` (or `.webm`) clip — drop it
+  straight into a LinkedIn/X post, where video autoplays.
+- **Full screen** → the ⤢ button maximises the book (hides the editor chrome); the
+  exported file has the same control for whoever opens it.
+
 ## The exported file
 
 The `.html` you download is the shareable artifact and it is genuinely standalone:
@@ -36,14 +44,15 @@ The `.html` you download is the shareable artifact and it is genuinely standalon
 - the page-rustle is synthesized with the Web Audio API (no audio asset).
 
 It opens by double-click anywhere and works fully offline. Recipients flip by
-dragging a page corner, the on-screen arrows, or `←`/`→`, with a fullscreen and a
-mute toggle.
+dragging a page corner, the on-screen arrows, or `←`/`→`, with full-screen and a
+mute toggle. The chosen background travels with it.
 
 ## Settings
 
 | Setting   | What it does |
 |-----------|--------------|
 | Layout    | **Book** (two-page spread on desktop, single page on mobile) or **Single** (one page, always) |
+| Background| Desk + page colour: **Paper** (cream), **Light** (white), or **Slate** (dark — best for dark pages, so letterboxing blends instead of showing white bands) |
 | Cover     | Treat the first page as a standalone cover |
 | Page sound| Toggle the synthesized paper rustle on flip |
 | Quality   | JPEG quality of the baked pages — trades sharpness against file size (live estimate next to *Download*) |

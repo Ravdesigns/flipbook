@@ -4,6 +4,17 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Flipbook — turn a PDF into a book</title>
+<meta name="description" content="Drop an A4 PDF or images and get a real page-turning book you can share as one self-contained file. Runs in your browser; files never leave your machine." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23FAF7EC'/%3E%3Crect x='9' y='9' width='14' height='14' fill='%23F58549'/%3E%3C/svg%3E" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Flipbook — turn a PDF into a book" />
+<meta property="og:description" content="Drop an A4 PDF or images, get a real page-turning book you can share as one self-contained file." />
+<meta property="og:image" content="https://flipbook-nu-tawny.vercel.app/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://flipbook-nu-tawny.vercel.app/" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#FAF7EC" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -157,6 +168,7 @@
     display:flex; gap:14px; opacity:0; animation:fadein .6s .4s var(--e-out) forwards}
   @keyframes fadein{to{opacity:1}}
   .hint.gone{opacity:0; transition:.5s}
+  body.bg-slate .hint{color:rgba(247,242,233,.5)}
 
   /* control rail */
   .rail{flex:0 0 auto; border-top:1px solid var(--line); background:var(--panel); display:flex; align-items:stretch; min-height:118px}
@@ -192,6 +204,10 @@
   .toggle.on{background:var(--orange)}
   .toggle::after{content:""; position:absolute; top:2px; left:2px; width:17px;height:17px; border-radius:50%; background:#fff; transition:.22s var(--e-spring); box-shadow:0 1px 3px rgba(0,0,0,.2)}
   .toggle.on::after{transform:translateX(17px)}
+  .swatches{display:flex; gap:9px}
+  .sw{width:22px; height:22px; border-radius:50%; background:var(--c); border:1px solid var(--line); cursor:pointer; padding:0; transition:.18s var(--e-spring)}
+  .sw:hover{transform:scale(1.12)}
+  .sw.on{box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--orange)}
   .range{flex:1; -webkit-appearance:none; appearance:none; height:3px; background:var(--line); border-radius:2px; outline:none}
   .range::-webkit-slider-thumb{-webkit-appearance:none; width:14px;height:14px; border-radius:50%; background:var(--ink); cursor:pointer; transition:.15s}
   .range::-webkit-slider-thumb:hover{background:var(--orange-ink); transform:scale(1.12)}
@@ -265,6 +281,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
           New
         </button>
+        <button class="btn ghost" id="video-btn" title="Record a video clip of the flip-through">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="14" height="14" rx="2"/><path d="M16 9l6-3v12l-6-3"/></svg>
+          Video
+        </button>
         <button class="btn primary" id="export-btn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l4-4m-4 4l-4-4"/><path d="M5 19h14"/></svg>
           Download <span class="sz" id="size-tag"></span>
@@ -303,6 +323,14 @@
           </div>
         </div>
         <div class="set-row">
+          <span class="k">Background</span>
+          <div class="swatches" id="swatches">
+            <button class="sw on" data-bg="paper" style="--c:#EBE2CC" title="Paper" aria-label="Paper background"></button>
+            <button class="sw" data-bg="light" style="--c:#FFFFFF" title="Light" aria-label="Light background"></button>
+            <button class="sw" data-bg="slate" style="--c:#1b1813" title="Slate" aria-label="Slate background"></button>
+          </div>
+        </div>
+        <div class="set-row">
           <span class="k">Cover page</span>
           <div class="toggle on" id="tg-cover"></div>
         </div>
@@ -338,6 +366,16 @@ const A4 = 1.4142;                 // height / width
 const RASTER_SCALE = 1.6;          // pdf raster scale
 const MAX_SIDE = 1700;             // cap longest image side on encode
 
+// Background presets — desk (surround) gradient, the page/letterbox fill, and
+// the surrounding text colours (so the exported viewer stays legible on a dark desk).
+const BG_PRESETS = {
+  paper: { d1:"#F1EAD6", d2:"#E5DBC1", box:"#FCFAF3", ink:"#161310", soft:"#6E685A", faint:"#9A9384", line:"rgba(22,19,16,.1)", navbg:"rgba(250,247,236,.85)" },
+  light: { d1:"#F4F4F2", d2:"#E8E8E4", box:"#FFFFFF", ink:"#161310", soft:"#6E685A", faint:"#9A9384", line:"rgba(22,19,16,.1)", navbg:"rgba(255,255,255,.88)" },
+  slate: { d1:"#322D25", d2:"#1C1813", box:"#2A251D", ink:"#F3EFE6", soft:"#B8B2A4", faint:"#8A8474", line:"rgba(255,255,255,.13)", navbg:"rgba(34,30,24,.85)" },
+};
+function bgPreset(){ return BG_PRESETS[state.bg] || BG_PRESETS.paper; }
+function boxColor(){ return bgPreset().box; }
+
 const state = {
   pages: [],        // { id, master(dataURL), w, h, norm(dataURL normalised to book ratio) }
   title: "Untitled book",
@@ -347,6 +385,7 @@ const state = {
   quality: 0.82,
   ratio: A4,        // book page ratio (h/w) — taken from the first page
   ratioLocked: false,
+  bg: "paper",      // background preset key
 };
 
 let pageFlip = null;
@@ -454,7 +493,7 @@ function addPage(master,w,h){ state.pages.push({id:++uid, master, w, h, norm:nul
 // stretched. Take the shape from the first page, then letterbox each page onto that
 // shape (centred on white) so nothing is ever distorted.
 function clampRatio(r){ return Math.max(0.45, Math.min(2.4, r||A4)); }
-function normalizeToRatio(src, ratio){
+function normalizeToRatio(src, ratio, bg){
   return new Promise(res=>{
     const img=new Image();
     img.onload=()=>{
@@ -462,7 +501,7 @@ function normalizeToRatio(src, ratio){
       let W,H; if(ratio>=1){ H=T; W=Math.round(T/ratio); } else { W=T; H=Math.round(T*ratio); }
       const same=Math.abs((ih/iw)-ratio) < 0.01;            // first page / matching aspect → fills exactly
       const c=document.createElement("canvas"); c.width=W; c.height=H;
-      const x=c.getContext("2d"); x.fillStyle="#fff"; x.fillRect(0,0,W,H);
+      const x=c.getContext("2d"); x.fillStyle=bg||"#fff"; x.fillRect(0,0,W,H);
       const s=same?Math.max(W/iw,H/ih):Math.min(W/iw,H/ih); // cover for exact match, contain otherwise
       const dw=iw*s, dh=ih*s;
       x.drawImage(img,(W-dw)/2,(H-dh)/2,dw,dh);
@@ -475,10 +514,11 @@ function normalizeToRatio(src, ratio){
 async function prepareBook(){
   if(!state.pages.length) return;
   if(!state.ratioLocked){ const p0=state.pages[0]; state.ratio=clampRatio((p0.h||1)/(p0.w||1)); state.ratioLocked=true; }
+  const bg=boxColor();
   for(const p of state.pages){
-    if(Math.abs((p.h||1)/(p.w||1) - state.ratio) < 0.012){ p.norm=null; p.normR=state.ratio; continue; } // already the book shape → keep crisp original
-    if(p.norm && p.normR===state.ratio) continue;
-    p.norm=await normalizeToRatio(p.master, state.ratio); p.normR=state.ratio;
+    if(Math.abs((p.h||1)/(p.w||1) - state.ratio) < 0.012){ p.norm=null; p.normR=state.ratio; p.normBg=bg; continue; } // already the book shape → keep crisp original
+    if(p.norm && p.normR===state.ratio && p.normBg===bg) continue;
+    p.norm=await normalizeToRatio(p.master, state.ratio, bg); p.normR=state.ratio; p.normBg=bg;
   }
 }
 
@@ -531,7 +571,7 @@ function resetAll(){
   state.pages=[]; encCache.clear(); state.title="Untitled book"; el.titleIn.value=state.title;
   state.ratio=A4; state.ratioLocked=false;
   if(pageFlip){ try{pageFlip.destroy();}catch(e){} pageFlip=null; }
-  el.book.innerHTML=""; el.body.classList.remove("loaded");
+  el.book.innerHTML=""; el.body.classList.remove("loaded","present");
 }
 
 /* ------------------------------------------------------------------ book render */
@@ -566,8 +606,8 @@ function rebuildBook(){
   const imgs = bookImages();
   pageFlip.loadFromImages(imgs);
   updateCoverState(0);                       // centre the cover before first paint (no slide-in)
-  pageFlip.on("flip", e=>{ updateCounter(e.data); updateCoverState(e.data); });
-  pageFlip.on("changeState", e=>{ if(e.data==="flipping"){ el.bookWrap.classList.remove("at-cover","at-back"); playRustle(); } });
+  pageFlip.on("flip", e=>{ updateCounter(e.data); updateCoverState(e.data); recState.idx=e.data; recState.flipping=false; });
+  pageFlip.on("changeState", e=>{ if(e.data==="flipping"){ el.bookWrap.classList.remove("at-cover","at-back"); recState.flipping=true; playRustle(); } else if(e.data==="read"){ recState.flipping=false; } });
   keepBookPainted(pageFlip, imgs);          // StPageFlip only repaints during flips — force it as images decode
   setTimeout(()=>{ refit(); const i=pageFlip.getCurrentPageIndex?.()||0; updateCounter(i); updateCoverState(i); el.bookWrap.classList.add("tweens"); }, 180);
 }
@@ -692,13 +732,24 @@ $("#seg-layout").addEventListener("click", e=>{ const b=e.target.closest("button
   state.layout=b.dataset.v; rebuildBook(); });
 $("#tg-cover").addEventListener("click", e=>{ state.cover=!state.cover; e.currentTarget.classList.toggle("on",state.cover); rebuildBook(); refreshThumbs(); });
 $("#tg-sound").addEventListener("click", e=>{ state.sound=!state.sound; e.currentTarget.classList.toggle("on",state.sound); if(state.sound) playRustle(); });
+
+// background presets
+function applyBg(){ const p=bgPreset(); const r=document.documentElement.style; r.setProperty("--desk-1",p.d1); r.setProperty("--desk-2",p.d2);
+  el.body.classList.remove("bg-paper","bg-light","bg-slate"); el.body.classList.add("bg-"+state.bg); }
+async function setBg(key){
+  state.bg=key; applyBg(); encCache.clear();
+  if(state.pages.length){ await prepareBook(); rebuildBook(); refreshThumbs(); scheduleEstimate(); }
+}
+$("#swatches").addEventListener("click", e=>{ const b=e.target.closest(".sw"); if(!b) return;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle("on", x===b)); setBg(b.dataset.bg); });
+applyBg();
 $("#reset-btn").addEventListener("click", ()=>{ if(state.pages.length<=1||confirm("Start a new book? Current pages will be cleared.")) resetAll(); });
 $("#quality").addEventListener("input", e=>{ state.quality=(+e.target.value)/100; el.qval.textContent="…"; });
 $("#quality").addEventListener("change", scheduleEstimate);
 
 /* ------------------------------------------------------------------ encode + size */
 function encodePage(p,q){
-  const key=p.id+":"+q.toFixed(2);
+  const key=p.id+":"+q.toFixed(2)+":"+state.bg;
   if(encCache.has(key)) return Promise.resolve(encCache.get(key));
   return new Promise(res=>{
     const img=new Image();
@@ -706,7 +757,7 @@ function encodePage(p,q){
       let w=img.naturalWidth, h=img.naturalHeight;
       const m=Math.max(w,h); if(m>MAX_SIDE){ const k=MAX_SIDE/m; w=Math.round(w*k); h=Math.round(h*k); }
       const c=document.createElement("canvas"); c.width=w; c.height=h;
-      const cx=c.getContext("2d"); cx.fillStyle="#fff"; cx.fillRect(0,0,w,h); cx.drawImage(img,0,0,w,h);
+      const cx=c.getContext("2d"); cx.fillStyle=boxColor(); cx.fillRect(0,0,w,h); cx.drawImage(img,0,0,w,h);
       const out=c.toDataURL("image/jpeg",q); encCache.set(key,out); res(out);
     };
     img.onerror=()=>res(p.norm||p.master);
@@ -725,6 +776,10 @@ async function runEstimate(){
 }
 
 /* ------------------------------------------------------------------ EXPORT */
+function sanitizeName(){ return (state.title||"flipbook").replace(/[^\w\- ]+/g,"").trim().replace(/\s+/g,"-").toLowerCase()||"flipbook"; }
+function downloadBlob(blob,name){ const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),5000); }
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+
 $("#export-btn").addEventListener("click", doExport);
 async function doExport(){
   if(!state.pages.length) return;
@@ -734,13 +789,75 @@ async function doExport(){
     const pages=await encodeAll(state.quality);
     ovProgress("assembling file");
     const html=buildExportHtml(pages);
-    const blob=new Blob([html],{type:"text/html"});
-    const a=document.createElement("a");
-    const name=(state.title||"flipbook").replace(/[^\w\- ]+/g,"").trim().replace(/\s+/g,"-").toLowerCase()||"flipbook";
-    a.href=URL.createObjectURL(blob); a.download=name+".html"; a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    const name=sanitizeName();
+    downloadBlob(new Blob([html],{type:"text/html"}), name+".html");
     hideOverlay(); toast("Saved <b>"+name+".html</b> — open or share it");
   }catch(err){ console.error(err); hideOverlay(); toast("Export failed — see console"); }
+}
+
+/* ------------------------------------------------------------------ VIDEO EXPORT */
+const recState={ idx:0, flipping:false };
+$("#video-btn").addEventListener("click", exportVideo);
+async function exportVideo(){
+  if(!state.pages.length || !pageFlip) return;
+  if(!window.MediaRecorder || !document.createElement("canvas").captureStream){ toast("Video capture not supported in this browser"); return; }
+  const mimes=["video/mp4;codecs=avc1.4d002a","video/mp4","video/webm;codecs=vp9","video/webm"];
+  const mime=mimes.find(t=>{ try{ return MediaRecorder.isTypeSupported(t); }catch(e){ return false; } }) || "";
+  const ext = mime.indexOf("mp4")>=0 ? "mp4" : "webm";
+
+  showOverlay("Recording your book…"); ovProgress("rolling");
+  const p=bgPreset();
+  let src=el.book.querySelector("canvas");
+  if(!src){ hideOverlay(); toast("Nothing to record yet"); return; }
+  const pad=Math.round(src.height*0.09);
+  const cap=1280, raw=Math.max(src.width+pad*2, src.height+pad*2), down=Math.min(1, cap/raw);
+  const rw=Math.round((src.width+pad*2)*down), rh=Math.round((src.height+pad*2)*down);
+  const rec=document.createElement("canvas"); rec.width=rw; rec.height=rh; const rx=rec.getContext("2d");
+  const sc=Math.min((rw-pad*2*down)/src.width, (rh-pad*2*down)/src.height);
+
+  let running=true;
+  function drawFrame(){
+    const cv=el.book.querySelector("canvas");
+    if(cv){
+      const g=rx.createRadialGradient(rw/2, rh*0.12, 0, rw/2, rh*0.12, Math.max(rw,rh)*0.95);
+      g.addColorStop(0,p.d1); g.addColorStop(1,p.d2); rx.fillStyle=g; rx.fillRect(0,0,rw,rh);
+      const last=state.pages.length-1; let sx=0, sw=cv.width;
+      if(!recState.flipping && coverOn() && recState.idx===0){ sx=cv.width/2; sw=cv.width/2; }
+      else if(!recState.flipping && coverOn() && recState.idx>=last){ sx=0; sw=cv.width/2; }
+      const dw=sw*sc, dh=cv.height*sc;
+      rx.drawImage(cv, sx,0, sw,cv.height, (rw-dw)/2, (rh-dh)/2, dw, dh);
+    }
+    if(running) requestAnimationFrame(drawFrame);
+  }
+  requestAnimationFrame(drawFrame);
+
+  const chunks=[];
+  let mr; try{ mr=new MediaRecorder(rec.captureStream(30), mime?{mimeType:mime,videoBitsPerSecond:9000000}:undefined); }
+  catch(e){ running=false; hideOverlay(); toast("Couldn't start recording"); return; }
+  mr.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+  const stopped=new Promise(res=>{ mr.onstop=res; });
+  mr.start();
+
+  try{
+    pageFlip.turnToPage(0); recState.idx=0; recState.flipping=false;
+    await wait(800);
+    const total=state.pages.length;
+    let guard=0;
+    while(pageFlip.getCurrentPageIndex() < total-1 && guard++ < total+6){
+      ovProgress("page "+(pageFlip.getCurrentPageIndex()+1)+" of "+total);
+      pageFlip.flipNext();
+      await wait(1150);
+    }
+    await wait(950);
+  }catch(e){ console.error(e); }
+
+  running=false; try{ mr.stop(); }catch(e){}
+  await stopped;
+  hideOverlay();
+  if(!chunks.length){ toast("Recording was empty — try again"); return; }
+  const blob=new Blob(chunks,{type:mime||"video/webm"});
+  downloadBlob(blob, sanitizeName()+"."+ext);
+  toast("Saved <b>"+sanitizeName()+"."+ext+"</b> — "+fmtMB(blob.size));
 }
 
 function buildExportHtml(pages){
@@ -748,10 +865,12 @@ function buildExportHtml(pages){
   const pagesJson=JSON.stringify(pages);
   const cfgJson=JSON.stringify(cfg);
   const titleHtml=escapeHtml(state.title);
-  const yr=new Date().getFullYear();
+  const p=bgPreset();
+  const themeCss=':root{--d1:'+p.d1+';--d2:'+p.d2+';--ink:'+p.ink+';--soft:'+p.soft+';--faint:'+p.faint+';--line:'+p.line+';--navbg:'+p.navbg+'}';
   return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8"/>\n'+
 '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>\n'+
-'<title>'+titleHtml+'</title>\n<style>'+EXPORT_CSS+'</style>\n</head>\n<body>\n'+
+'<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 32 32\'%3E%3Crect width=\'32\' height=\'32\' rx=\'4\' fill=\'%23FAF7EC\'/%3E%3Crect x=\'9\' y=\'9\' width=\'14\' height=\'14\' fill=\'%23F58549\'/%3E%3C/svg%3E"/>\n'+
+'<title>'+titleHtml+'</title>\n<style>'+EXPORT_CSS+themeCss+'</style>\n</head>\n<body>\n'+
 '<div class="vp-grain"></div>\n'+
 '<header class="vp-top"><div class="vp-title">'+titleHtml+'</div><div class="vp-meta">'+state.pages.length+' pages</div></header>\n'+
 '<div class="vp-stage"><div class="vp-hint" id="vp-hint">drag a corner · or use ← →</div><div class="vp-bookwrap'+(cfg.single?' single':'')+'" id="vp-bookwrap"><div id="vp-book"></div></div></div>\n'+
@@ -838,7 +957,7 @@ function viewerMain(PAGES, CFG){
 
 /* ============================================================ EXPORT CSS */
 const EXPORT_CSS = `
-:root{--paper:#FAF7EC;--ink:#161310;--soft:#6E685A;--faint:#9A9384;--line:rgba(22,19,16,.1);--orange:#F58549;--d1:#F1EAD6;--d2:#E2D7BC;
+:root{--paper:#FAF7EC;--ink:#161310;--soft:#6E685A;--faint:#9A9384;--line:rgba(22,19,16,.1);--orange:#F58549;--d1:#F1EAD6;--d2:#E2D7BC;--navbg:rgba(250,247,236,.85);
 --serif:Georgia,'Iowan Old Style','Palatino Linotype',Palatino,serif;--sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
 --mono:ui-monospace,'SF Mono','JetBrains Mono',Menlo,monospace;--eo:cubic-bezier(.16,1,.3,1);--es:cubic-bezier(.32,.72,0,1);}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -865,7 +984,7 @@ body{font-family:var(--sans);color:var(--ink);background:radial-gradient(125% 10
 .stf__item img,#vp-book img{display:block;width:100%;height:100%;object-fit:cover}
 .vp-hint{position:fixed;bottom:78px;left:50%;transform:translateX(-50%);z-index:39;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);transition:.5s var(--eo);pointer-events:none}
 .vp-hint.gone{opacity:0}
-.vp-nav{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:40;display:flex;align-items:center;gap:5px;padding:6px;background:rgba(250,247,236,.8);border:1px solid var(--line);border-radius:40px;backdrop-filter:blur(10px);box-shadow:0 6px 26px rgba(40,30,16,.12)}
+.vp-nav{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:40;display:flex;align-items:center;gap:5px;padding:6px;background:var(--navbg);border:1px solid var(--line);border-radius:40px;backdrop-filter:blur(10px);box-shadow:0 6px 26px rgba(40,30,16,.12)}
 .vp-nav button{width:36px;height:36px;border:none;background:none;border-radius:50%;display:grid;place-items:center;color:var(--soft);cursor:pointer;transition:.2s}
 .vp-nav button:hover{background:rgba(22,19,16,.06);color:var(--ink)}
 .vp-nav button:disabled{opacity:.26;cursor:default}
