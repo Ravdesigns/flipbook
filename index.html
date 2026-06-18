@@ -15,6 +15,9 @@
 <meta property="og:url" content="https://flipbook-nu-tawny.vercel.app/" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="theme-color" content="#FAF7EC" />
+<!-- Vercel Web Analytics (maker page only; never added to exported books) -->
+<script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
+<script defer src="/_vercel/insights/script.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -415,6 +418,7 @@ function hideOverlay(){ el.overlay.classList.remove("show"); }
 function bytesOfDataUrl(u){ const i=u.indexOf(","); return Math.floor((u.length-i-1)*0.75); }
 function fmtMB(b){ return (b/1048576).toFixed(b<1048576?2:1)+" MB"; }
 function escapeHtml(s){ return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function track(name,data){ try{ if(window.va) window.va("event",{name:name,data:data||{}}); }catch(e){} }  // anonymous usage event (Vercel)
 
 /* ------------------------------------------------------------------ rustle synth (preview copy) */
 let actx=null;
@@ -460,7 +464,8 @@ async function handleFiles(fileList){
   }
   if(added){ ovProgress("fitting pages"); await prepareBook(); }
   hideOverlay();
-  if(added){ enterEditor(); rebuildBook(); refreshThumbs(); scheduleEstimate(); }
+  if(added){ enterEditor(); rebuildBook(); refreshThumbs(); scheduleEstimate();
+    track("upload", { kind: /pdf/i.test(files[0].type||files[0].name)?"pdf":"image", pages: state.pages.length }); }
 }
 
 async function ingestPdf(file){
@@ -524,6 +529,7 @@ async function prepareBook(){
 
 /* ------------------------------------------------------------------ demo */
 function loadDemo(){
+  track("demo");
   showOverlay("Building a demo…");
   setTimeout(()=>{
     const W=760, H=Math.round(W*A4);
@@ -671,6 +677,7 @@ el.next.addEventListener("click", ()=>pageFlip&&pageFlip.flipNext());
 // full-screen "present" mode — maximise the book, hide editor chrome
 function togglePresent(){
   const goingIn = !el.body.classList.contains("present");
+  if(goingIn) track("fullscreen");
   el.body.classList.toggle("present", goingIn);
   try{
     if(goingIn){ document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); }
@@ -791,6 +798,7 @@ async function doExport(){
     const html=buildExportHtml(pages);
     const name=sanitizeName();
     downloadBlob(new Blob([html],{type:"text/html"}), name+".html");
+    track("download_html", { pages: state.pages.length, bg: state.bg });
     hideOverlay(); toast("Saved <b>"+name+".html</b> — open or share it");
   }catch(err){ console.error(err); hideOverlay(); toast("Export failed — see console"); }
 }
@@ -857,6 +865,7 @@ async function exportVideo(){
   if(!chunks.length){ toast("Recording was empty — try again"); return; }
   const blob=new Blob(chunks,{type:mime||"video/webm"});
   downloadBlob(blob, sanitizeName()+"."+ext);
+  track("download_video", { pages: state.pages.length, ext: ext });
   toast("Saved <b>"+sanitizeName()+"."+ext+"</b> — "+fmtMB(blob.size));
 }
 
